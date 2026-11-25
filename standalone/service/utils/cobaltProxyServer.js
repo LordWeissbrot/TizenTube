@@ -268,6 +268,24 @@ function startServer() {
     }
 
     const proxyServer = http.createServer((request, response) => {
+        // Direct (non-proxy) request for the log: http://<TV IP>:8101/__ttlog[?all]
+        // Retail TVs don't allow `sdb pull` from the share directory, so this
+        // is the only practical way to read it. Proxy requests always carry an
+        // absolute URL, so a bare path can't collide with proxied traffic.
+        if (request.url === '/__ttlog' || request.url === '/__ttlog?all') {
+            let text = '';
+            try {
+                if (request.url === '/__ttlog?all') text += fs.readFileSync(log.LOG_FILE + '.1', 'utf8');
+            } catch (e) { /* no rotated file yet */ }
+            try {
+                text += fs.readFileSync(log.LOG_FILE, 'utf8');
+            } catch (e) {
+                text += '(no log yet: ' + e.message + ')\n';
+            }
+            response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+            return response.end(text);
+        }
+
         const targetUrl = url.parse(request.url);
 
         const targetRequest = http.request({
