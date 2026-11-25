@@ -5,6 +5,4 @@ dist/
 .sign
 package-lock.json
 release/
-node_modules/
-dist/
 standalone/service/transpiled/
