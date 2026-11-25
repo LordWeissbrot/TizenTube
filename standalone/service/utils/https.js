@@ -453,7 +453,9 @@ ClientRequest.prototype.connect = function () {
     this.tcpSocket = tcp;
 
     tcp.setTimeout(15000, function () {
-        self.fail(new Error("TCP connection timeout"));
+        var err = new Error("TCP idle timeout");
+        err.code = "ETIMEDOUT";
+        self.fail(err);
     });
 
     tcp.once("connect", function () {
@@ -514,6 +516,10 @@ ClientRequest.prototype.connect = function () {
 
                 return;
             }
+
+            // 15 s is fine for connecting, but as an idle limit for the whole
+            // request it kills slow responses (and long polls) mid-way.
+            tcp.setTimeout(60000);
 
             self.installSocket();
             self.sendRequest();
@@ -699,8 +705,17 @@ ClientRequest.prototype.fail = function (error) {
         this.tcpSocket.destroy();
     }
 
-    if (this.response) {
+    // Readable#destroy() only exists since Node 8. On older Node (e.g. Node 4
+    // on Tizen) calling it unguarded throws a TypeError from inside a socket
+    // event handler, which is uncaught and kills the whole proxy service.
+    if (this.response && typeof this.response.destroy === "function") {
         this.response.destroy();
+    } else if (this.response) {
+        this.response.emit("aborted");
+    }
+
+    if (error && !error.phase) {
+        error.phase = this.responseEmitted ? "body" : (this.socket ? "headers" : "connect");
     }
 
     this.emit("error", error);

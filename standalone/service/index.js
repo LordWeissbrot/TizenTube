@@ -11,6 +11,16 @@ const startServer = require('./utils/cobaltProxyServer.js');
 const URL = require('url');
 const path = require('path');
 const injector = require('./utils/injector.js');
+const log = require('./utils/log.js');
+
+log('SERVICE start', 'node=' + process.version, 'pid=' + process.pid, 'clock=' + new Date().toISOString());
+
+// An uncaught error in any socket handler would otherwise kill the whole
+// service silently, and the player then only shows "A network error has
+// occurred". Log it and keep serving.
+process.on('uncaughtException', err => {
+    log('UNCAUGHT', err, err && err.stack ? err.stack.split('\n').slice(0, 6).join(' | ') : '');
+});
 
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
